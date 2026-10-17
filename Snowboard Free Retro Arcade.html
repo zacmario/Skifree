@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Snowboard Free Retro Arcade</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        html, body {
+            font-family: 'VT323', monospace;
+            background-color: #008080; /* Classic Win95 Teal */
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* Win95 Bevel Borders */
+        .win95-outset {
+            border: 2px solid;
+            border-color: #ffffff #404040 #404040 #ffffff;
+            background-color: #c0c0c0;
+        }
+
+        .win95-inset {
+            border: 2px solid;
+            border-color: #808080 #ffffff #ffffff #808080;
+            background-color: #ffffff;
+        }
+
+        .win95-button {
+            border: 2px solid;
+            border-color: #ffffff #404040 #404040 #ffffff;
+            background-color: #c0c0c0;
+            box-shadow: 1px 1px 0px #000;
+        }
+
+        .win95-button:active {
+            border-color: #404040 #ffffff #ffffff #404040;
+            transform: translate(1px, 1px);
+        }
+
+        canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            display: block;
+        }
+
+        /* Dedicated Bottom Joystick Zone */
+        .joystick-outer {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.25);
+            border: 3px solid #808080;
+            box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5);
+            touch-action: none;
+        }
+
+        .joystick-inner {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #c0c0c0;
+            border: 2px solid #ffffff;
+            box-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+            top: 28px;
+            left: 28px;
+            pointer-events: none;
+        }
+
+        @keyframes flash-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+
+        .animate-flash {
+            animation: flash-red 0.5s infinite;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen w-screen overflow-hidden justify-between items-center p-1 sm:p-2">
+
+    <!-- Top Dashboard Header -->
+    <div class="w-full max-w-xl win95-outset p-1 flex-shrink-0 z-10 shadow-lg">
+        <div class="bg-[#000080] text-white px-2 py-0.5 font-bold flex justify-between items-center text-base sm:text-lg">
+            <span><i class="fa-solid fa-person-snowboarding mr-1 sm:mr-2"></i>Snowboard Free</span>
+            <div class="flex gap-2 text-xs sm:text-sm">
+                <button id="btn-sound" class="text-white hover:text-yellow-300 px-1" title="Toggle Mute"><i class="fa-solid fa-volume-high"></i></button>
+            </div>
+        </div>
+
+        <!-- Realtime Game HUD -->
+        <div class="grid grid-cols-4 gap-1 text-center font-mono text-sm sm:text-base font-bold mt-1">
+            <div class="win95-inset p-1 bg-black text-red-500 flex flex-col justify-center">
+                <span class="text-[10px] text-gray-400 uppercase leading-none">Dist</span>
+                <span id="ui-dist">0m</span>
+            </div>
+            <div class="win95-inset p-1 bg-black text-yellow-400 flex flex-col justify-center">
+                <span class="text-[10px] text-gray-400 uppercase leading-none">Score</span>
+                <span id="ui-score">0</span>
+            </div>
+            <div class="win95-inset p-1 bg-black text-green-400 flex flex-col justify-center">
+                <span class="text-[10px] text-gray-400 uppercase leading-none">Speed</span>
+                <span id="ui-speed">0m/s</span>
+            </div>
+            <div class="win95-inset p-1 bg-black text-cyan-400 flex flex-col justify-center">
+                <span class="text-[10px] text-gray-400 uppercase leading-none">Best</span>
+                <span id="ui-high">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Mobile Game Canvas Area (Full Height Portrait Viewport) -->
+    <div class="relative flex-grow w-full max-w-xl my-1 win95-outset p-1 overflow-hidden flex items-center justify-center">
+        <canvas id="gameCanvas" class="bg-white rounded border border-gray-400 w-full h-full"></canvas>
+
+        <!-- Dynamic Yeti Warning & Speed HUD Overlay -->
+        <div id="yeti-banner" class="absolute top-4 left-0 right-0 hidden z-20 pointer-events-none flex flex-col items-center gap-1">
+            <div class="bg-red-700 text-white font-black text-base sm:text-lg px-4 py-1 border-2 border-white shadow-2xl rounded animate-flash text-center">
+                👹 YETI CHASE IN PROGRESS! 👹
+            </div>
+            <div class="win95-outset px-3 py-1 bg-black text-yellow-300 font-mono text-xs sm:text-sm flex items-center gap-2 border border-white">
+                <span id="ui-yeti-status" class="font-bold">YETI PACE: REGULAR</span>
+                <div class="w-16 sm:w-24 bg-gray-800 h-2 rounded overflow-hidden border border-gray-500">
+                    <div id="yeti-speed-bar" class="bg-yellow-400 h-full w-1/2 transition-all duration-300"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- In-Canvas Game Over Banner (Non-blocking) -->
+        <div id="game-over-banner" class="absolute inset-0 bg-black/50 hidden z-20 pointer-events-none flex flex-col items-center justify-center p-4 text-center">
+            <div class="win95-outset p-4 max-w-xs w-full bg-red-100 border-2 border-red-600 shadow-2xl">
+                <div id="game-over-title" class="text-red-700 font-black text-2xl mb-1">EATEN BY YETI!</div>
+                <div id="game-over-desc" class="text-black text-sm mb-2">The Yeti caught you!</div>
+                <div class="text-xs font-mono text-gray-700 font-bold bg-white p-2 win95-inset">
+                    PRESS 'START / RESET' BELOW TO PLAY AGAIN
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dedicated Bottom Control Deck & Buttons (Out of Canvas Viewport) -->
+    <div class="w-full max-w-xl win95-outset p-2 flex-shrink-0 z-10 flex items-center justify-between gap-2 bg-[#d4d4d4]">
+        
+        <!-- Left Side: Touch Virtual Joystick -->
+        <div class="flex items-center gap-2">
+            <div id="joystick-container" class="joystick-outer">
+                <div id="joystick-knob" class="joystick-inner"></div>
+            </div>
+            <div class="text-[11px] font-mono leading-tight text-gray-700 hidden sm:block">
+                <div>▲ SLOW</div>
+                <div>▼ FAST</div>
+                <div>◄ ► CARVE</div>
+            </div>
+        </div>
+
+        <!-- Center: Single Unified Tactical START / RESET Button -->
+        <div class="flex flex-col items-center justify-center flex-grow px-1">
+            <button id="btn-start-deck" class="win95-button w-full py-3 px-2 font-bold text-base sm:text-lg bg-green-400 hover:bg-green-500 active:bg-green-600 text-black border-2 border-green-800 flex items-center justify-center gap-1 shadow-md cursor-pointer select-none">
+                <i class="fa-solid fa-play"></i>
+                <span id="btn-start-text">START GAME</span>
+            </button>
+            <div id="status-bar" class="text-[10px] sm:text-xs font-mono text-gray-800 truncate mt-1 text-center w-full font-bold">
+                Press START GAME to Shred the Slopes!
+            </div>
+        </div>
+
+        <!-- Right Side: Big Arcade JUMP Action Button -->
+        <div class="flex items-center">
+            <button id="btn-jump-deck" class="win95-button w-20 h-20 sm:w-22 sm:h-22 rounded-full bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 font-black text-lg sm:text-xl text-black flex flex-col items-center justify-center shadow-lg border-2 border-yellow-700 active:scale-95 cursor-pointer select-none">
+                <i class="fa-solid fa-bolt text-sm"></i>
+                <span>JUMP</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Engine Logic Script -->
+    <script>
+        /**
+         * SNOWBOARD FREE RETRO MOBILE ENGINE
+         * Features wipeout fall-down mechanics, wooden jump logs, balanced slow Yeti chase,
+         * obstacle shattering, Web Audio sound synthesizer, and bottom arcade control deck.
+         */
+
+        // --- Web Audio Synthesizer ---
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playTone(freq, type, duration, gainVal = 0.1) {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.00001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch (e) {}
+            }
+
+            carveNoise() {
+                if (this.muted || !this.ctx || Math.random() > 0.45) return;
+                this.playTone(70 + Math.random() * 50, 'triangle', 0.04, 0.02);
+            }
+
+            jump() {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(200, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(850, this.ctx.currentTime + 0.35);
+                gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.35);
+            }
+
+            gateBonus() {
+                this.playTone(523.25, 'sine', 0.08, 0.15); // C5
+                setTimeout(() => this.playTone(659.25, 'sine', 0.08, 0.15), 60); // E5
+                setTimeout(() => this.playTone(783.99, 'sine', 0.18, 0.15), 120); // G5
+            }
+
+            crashWipeout() {
+                if (this.muted || !this.ctx) return;
+
+                // Low thud impact
+                this.playTone(120, 'sawtooth', 0.35, 0.4);
+
+                // Noisy crash crunch
+                const bufferSize = this.ctx.sampleRate * 0.35;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+                noise.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+
+            shatter() {
+                if (this.muted || !this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 0.2;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                noise.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+
+                this.playTone(90, 'sawtooth', 0.25, 0.3);
+            }
+
+            yetiRoar() {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(35, this.ctx.currentTime + 0.9);
+                gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.9);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.9);
+            }
+        }
+
+        const audioEngine = new SoundFX();
+
+        // --- Game Enums & Settings ---
+        const STATE = { MENU: 0, PLAYING: 1, CRASHED: 2, EATEN: 3 };
+        const OBSTACLE = { TREE: 0, ROCK: 1, LOG: 2, GATE_LEFT: 3, GATE_RIGHT: 4, FENCE: 5 };
+
+        // Canvas & Core Variables
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let gameState = STATE.MENU;
+        let score = 0;
+        let distance = 0;
+        let speed = 0;
+        let highScore = localStorage.getItem('snowboard_free_high_score') || 0;
+
+        // Rider Character Object
+        const rider = {
+            x: 0,
+            y: 120,
+            vx: 0,
+            vy: 0,
+            angle: 0,
+            baseSpeed: 4.8,
+            maxSpeed: 11.5,
+            airborne: false,
+            jumpTime: 0,
+            trickSpin: 0,
+            // Wipeout / Fallen state variables
+            fallen: false,
+            fallTimer: 0,
+            fallTotalDuration: 1.3,
+            invincibleTimer: 0,
+            blinkTimer: 0
+        };
+
+        // Yeti / Abominable Snow Monster Object
+        const yeti = {
+            x: 0,
+            y: -300,
+            active: false,
+            baseSpeed: 5.2,
+            topSpeed: 6.8,
+            currentSpeed: 5.2,
+            stamina: 100,
+            hesitating: false,
+            hesitateTimer: 0,
+            frame: 0,
+            mouthOpen: false
+        };
+
+        // Collections
+        let obstacles = [];
+        let particles = [];
+        let boardTrails = [];
+
+        // Touch Control Variables
+        let touchActive = false;
+        let joystickVector = { x: 0, y: 0 };
+        const keys = {};
+
+        // Canvas Responsive Resize
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            if (rider.x === 0) rider.x = canvas.width / 2;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // --- Terrain Generation ---
+        function spawnInitialTerrain() {
+            obstacles = [];
+            const startY = 320;
+            const gx = canvas.width / 2 - 35;
+            obstacles.push({ id: Math.random(), x: gx, y: startY, type: OBSTACLE.GATE_LEFT, cleared: false });
+            obstacles.push({ id: Math.random(), x: gx + 70, y: startY, type: OBSTACLE.GATE_RIGHT, cleared: false });
+            obstacles.push({ id: Math.random(), x: canvas.width / 2, y: startY + 160, type: OBSTACLE.LOG, cleared: false });
+        }
+
+        function generateProceduralTerrain() {
+            obstacles = obstacles.filter(o => o.y > rider.y - canvas.height);
+
+            // Progressive Obstacle Spacing Density Curve
+            let maxTargetObstacles = 8;
+            let minGapY = 180;
+
+            if (distance > 300 && distance <= 700) {
+                maxTargetObstacles = 14;
+                minGapY = 130;
+            } else if (distance > 700 && distance <= 1200) {
+                maxTargetObstacles = 20;
+                minGapY = 100;
+            } else if (distance > 1200) {
+                maxTargetObstacles = 28;
+                minGapY = 75;
+            }
+
+            while (obstacles.length < maxTargetObstacles) {
+                let maxY = rider.y + canvas.height;
+                obstacles.forEach(o => { if (o.y > maxY) maxY = o.y; });
+
+                const spawnY = maxY + minGapY + Math.random() * 80;
+                const randVal = Math.random();
+                let type = OBSTACLE.TREE;
+
+                if (distance < 300) {
+                    if (randVal < 0.40) type = OBSTACLE.LOG;
+                    else if (randVal < 0.70) type = OBSTACLE.TREE;
+                    else type = OBSTACLE.GATE_LEFT;
+                } else if (distance < 700) {
+                    if (randVal < 0.35) type = OBSTACLE.TREE;
+                    else if (randVal < 0.60) type = OBSTACLE.LOG;
+                    else if (randVal < 0.80) type = OBSTACLE.ROCK;
+                    else type = OBSTACLE.GATE_LEFT;
+                } else {
+                    if (randVal < 0.40) type = OBSTACLE.TREE;
+                    else if (randVal < 0.60) type = OBSTACLE.ROCK;
+                    else if (randVal < 0.75) type = OBSTACLE.FENCE;
+                    else if (randVal < 0.88) type = OBSTACLE.LOG;
+                    else type = OBSTACLE.GATE_LEFT;
+                }
+
+                if (type === OBSTACLE.GATE_LEFT) {
+                    const gx = Math.random() * (canvas.width - 120) + 35;
+                    obstacles.push({ id: Math.random(), x: gx, y: spawnY, type: OBSTACLE.GATE_LEFT, cleared: false });
+                    obstacles.push({ id: Math.random(), x: gx + 70, y: spawnY, type: OBSTACLE.GATE_RIGHT, cleared: false });
+                } else {
+                    obstacles.push({
+                        id: Math.random(),
+                        x: Math.random() * (canvas.width - 50) + 25,
+                        y: spawnY,
+                        type: type,
+                        cleared: false
+                    });
+                }
+            }
+        }
+
+        // --- Controls Mapping ---
+        function computeControls() {
+            let steer = 0; // -1 (Left) to 1 (Right)
+            let accel = 0; // -1 (Slow Down / Brake) to 1 (Fast / Downhill Acceleration)
+
+            if (touchActive) {
+                steer = joystickVector.x;
+                accel = joystickVector.y;
+            }
+
+            if (keys['ArrowLeft'] || keys['a']) steer = -1;
+            if (keys['ArrowRight'] || keys['d']) steer = 1;
+            if (keys['ArrowDown'] || keys['s']) accel = 1;
+            if (keys['ArrowUp'] || keys['w']) accel = -1;
+
+            return { steer, accel };
+        }
+
+        function triggerManualJump() {
+            if (!rider.airborne && !rider.fallen && gameState === STATE.PLAYING) {
+                rider.airborne = true;
+                rider.jumpTime = 0.70;
+                rider.trickSpin = 0;
+                audioEngine.jump();
+            }
+        }
+
+        // --- Main Update Loop ---
+        function update(dt) {
+            if (gameState !== STATE.PLAYING) return;
+
+            // Invincibility Timer Handling
+            if (rider.invincibleTimer > 0) {
+                rider.invincibleTimer -= dt;
+                rider.blinkTimer += dt;
+            }
+
+            // --- FALLEN / WIPEOUT STATE LOGIC ---
+            if (rider.fallen) {
+                rider.fallTimer -= dt;
+                rider.vx = 0;
+                rider.vy = 0;
+                speed = 0;
+
+                // Spawn snow puff particles while tumbling
+                if (Math.random() < 0.40) {
+                    particles.push({
+                        x: rider.x + (Math.random() - 0.5) * 16,
+                        y: rider.y + (Math.random() - 0.5) * 16,
+                        vx: (Math.random() - 0.5) * 4,
+                        vy: (Math.random() - 0.5) * 4,
+                        color: '#ffffff',
+                        life: 0.35
+                    });
+                }
+
+                // Recover and stand back up on board
+                if (rider.fallTimer <= 0) {
+                    rider.fallen = false;
+                    rider.invincibleTimer = 1.0; // Short grace period upon standing
+                    rider.blinkTimer = 0;
+                    updateStatus('RECOVERED! Back on your feet!');
+                }
+
+                // Keep terrain alive and update particles during wipeout
+                generateProceduralTerrain();
+                updateParticles(dt);
+                updateYeti(dt);
+                return;
+            }
+
+            // --- NORMAL ACTIVE RIDING LOGIC ---
+            const { steer, accel } = computeControls();
+
+            // Downhill Target Velocity
+            const targetSpeed = Math.max(2.2, Math.min(rider.maxSpeed, rider.baseSpeed + accel * 5.0));
+            rider.angle = steer;
+
+            rider.vx = steer * targetSpeed * 0.88;
+            rider.vy = Math.sqrt(Math.max(0.5, targetSpeed * targetSpeed - rider.vx * rider.vx));
+
+            rider.x += rider.vx;
+            rider.y += rider.vy;
+
+            // Screen Boundary Clamping
+            if (rider.x < 18) rider.x = 18;
+            if (rider.x > canvas.width - 18) rider.x = canvas.width - 18;
+
+            // Metrics Calculation
+            distance = Math.floor(rider.y / 10);
+            speed = Math.floor(Math.sqrt(rider.vx * rider.vx + rider.vy * rider.vy) * 3);
+            score = Math.max(score, distance);
+
+            // Carving FX & Snow Powder Trails
+            if (!rider.airborne && speed > 2) {
+                audioEngine.carveNoise();
+                if (Math.random() < 0.60) {
+                    boardTrails.push({ x: rider.x, y: rider.y, age: 0 });
+                    if (boardTrails.length > 150) boardTrails.shift();
+                }
+            }
+
+            // Airborne Trick Spin Logic
+            if (rider.airborne) {
+                rider.jumpTime -= dt;
+                rider.trickSpin += 14;
+                if (rider.jumpTime <= 0) {
+                    rider.airborne = false;
+                    score += 250;
+                    updateStatus('360 LOG TRICK LANDED! +250 PTS');
+                }
+            }
+
+            // Collision Check System
+            checkCollisions();
+
+            // Yeti System Logic
+            updateYeti(dt);
+
+            generateProceduralTerrain();
+            updateParticles(dt);
+        }
+
+        // --- Yeti System ---
+        function updateYeti(dt) {
+            // BALANCED SLOW YETI CHASE (Spawns at 1200m)
+            if (distance >= 1200 && !yeti.active) {
+                yeti.active = true;
+                yeti.x = rider.x + (Math.random() > 0.5 ? 80 : -80);
+                yeti.y = rider.y - canvas.height * 0.45;
+                yeti.stamina = 100;
+                yeti.hesitating = false;
+                audioEngine.yetiRoar();
+                
+                document.getElementById('yeti-banner').classList.remove('hidden');
+                updateStatus('👹 YETI CHASE! Pull DOWN on Joystick to easily outrun!');
+            }
+
+            if (yeti.active) {
+                const ydx = rider.x - yeti.x;
+                const ydy = rider.y - yeti.y;
+                const ydist = Math.sqrt(ydx * ydx + ydy * ydy);
+
+                // Yeti Hesitation & Pacing Mechanics
+                if (yeti.hesitating) {
+                    yeti.hesitateTimer -= dt;
+                    yeti.currentSpeed = 2.0;
+                    if (yeti.hesitateTimer <= 0) {
+                        yeti.hesitating = false;
+                        yeti.stamina = 100;
+                    }
+                } else {
+                    if (ydist > 350) {
+                        yeti.currentSpeed = yeti.topSpeed;
+                    } else {
+                        yeti.currentSpeed = yeti.baseSpeed;
+                    }
+
+                    yeti.stamina -= dt * 18;
+                    if (yeti.stamina <= 0) {
+                        yeti.hesitating = true;
+                        yeti.hesitateTimer = 2.0;
+                        audioEngine.yetiRoar();
+                    }
+                }
+
+                // Smooth movement towards player
+                yeti.x += (ydx / ydist) * yeti.currentSpeed;
+                yeti.y += (ydy / ydist) * yeti.currentSpeed;
+                yeti.frame += 0.20;
+                yeti.mouthOpen = Math.floor(yeti.frame) % 2 === 0;
+
+                // Update Yeti HUD Bar
+                const speedBar = document.getElementById('yeti-speed-bar');
+                const yetiStatus = document.getElementById('ui-yeti-status');
+                if (speedBar && yetiStatus) {
+                    if (yeti.hesitating) {
+                        yetiStatus.innerText = 'YETI: TIRED (PANTING)';
+                        yetiStatus.className = 'font-bold text-green-400';
+                        speedBar.style.width = '20%';
+                        speedBar.className = 'bg-green-400 h-full transition-all duration-300';
+                    } else if (yeti.currentSpeed >= yeti.topSpeed) {
+                        yetiStatus.innerText = 'YETI: SPRINTING';
+                        yetiStatus.className = 'font-bold text-red-500';
+                        speedBar.style.width = '100%';
+                        speedBar.className = 'bg-red-500 h-full transition-all duration-300';
+                    } else {
+                        yetiStatus.innerText = 'YETI: TROTTING';
+                        yetiStatus.className = 'font-bold text-yellow-300';
+                        speedBar.style.width = '55%';
+                        speedBar.className = 'bg-yellow-400 h-full transition-all duration-300';
+                    }
+                }
+
+                // Yeti catches player (works even if player is down)
+                if (ydist < 28 && gameState !== STATE.EATEN) {
+                    gameState = STATE.EATEN;
+                    audioEngine.shatter();
+                    audioEngine.yetiRoar();
+                    document.getElementById('yeti-banner').classList.add('hidden');
+                    showGameOverBanner('EATEN BY YETI!', `The Yeti caught you at ${distance}m!`);
+                }
+            }
+        }
+
+        // --- Collision Check Logic ---
+        function checkCollisions() {
+            const rRadius = 10;
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                const dx = rider.x - obs.x;
+                const dy = rider.y - obs.y;
+                const distSq = dx * dx + dy * dy;
+
+                // 1. Jump Logs
+                if (obs.type === OBSTACLE.LOG) {
+                    if (Math.abs(dx) < 18 && Math.abs(dy) < 10 && !rider.airborne && !rider.fallen) {
+                        rider.airborne = true;
+                        rider.jumpTime = 0.70;
+                        rider.trickSpin = 0;
+                        audioEngine.jump();
+                    }
+                    continue;
+                }
+
+                // 2. Slalom Gates (+500 PTS Bonus)
+                if (obs.type === OBSTACLE.GATE_LEFT && !obs.cleared) {
+                    const rightGate = obstacles.find(o => o.type === OBSTACLE.GATE_RIGHT && Math.abs(o.y - obs.y) < 5);
+                    if (rightGate) {
+                        if (rider.y >= obs.y && (rider.y - rider.vy) < obs.y) {
+                            if (rider.x >= obs.x && rider.x <= rightGate.x) {
+                                obs.cleared = true;
+                                rightGate.cleared = true;
+                                score += 500;
+                                audioEngine.gateBonus();
+                                updateStatus('SLALOM GATE CLEARED! +500 PTS');
+                            }
+                        }
+                    }
+                }
+
+                // Skip solid obstacle collisions if player is airborne, already fallen, or currently invincible
+                if (rider.airborne || rider.fallen || rider.invincibleTimer > 0) continue;
+
+                // 3. Solid Obstacle Crash Check (Trees, Rocks, Fences, Gate Poles)
+                let hitRadius = 12;
+                if (obs.type === OBSTACLE.TREE) hitRadius = 14;
+                if (obs.type === OBSTACLE.ROCK) hitRadius = 11;
+                if (obs.type === OBSTACLE.FENCE) hitRadius = 16;
+                if (obs.type === OBSTACLE.GATE_LEFT || obs.type === OBSTACLE.GATE_RIGHT) hitRadius = 8;
+
+                if (distSq < (hitRadius + rRadius) * (hitRadius + rRadius)) {
+                    shatterObstacle(obs);
+                    triggerWipeout();
+                    obstacles.splice(i, 1); // Shatter obstacle so player doesn't get stuck
+                }
+            }
+        }
+
+        // Shatter Obstacle Particle FX
+        function shatterObstacle(obs) {
+            let colors = ['#8b4513', '#006400', '#ffffff'];
+            if (obs.type === OBSTACLE.ROCK) colors = ['#808080', '#a0a0a0', '#ffffff'];
+            if (obs.type === OBSTACLE.FENCE) colors = ['#8b5a2b', '#cd853f', '#ffffff'];
+
+            for (let i = 0; i < 22; i++) {
+                particles.push({
+                    x: obs.x,
+                    y: obs.y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    life: 0.55
+                });
+            }
+        }
+
+        // Trigger Full Fall-Down Wipeout State
+        function triggerWipeout() {
+            audioEngine.crashWipeout();
+
+            score = Math.max(0, score - 150);
+            rider.fallen = true;
+            rider.fallTimer = rider.fallTotalDuration;
+            rider.airborne = false;
+            rider.vx = 0;
+            rider.vy = 0;
+            rider.invincibleTimer = rider.fallTotalDuration + 1.0; // Invulnerable while down + grace period
+            rider.blinkTimer = 0;
+
+            // Spawn cloud of snow puff particles at crash site
+            for (let i = 0; i < 18; i++) {
+                particles.push({
+                    x: rider.x + (Math.random() - 0.5) * 20,
+                    y: rider.y + (Math.random() - 0.5) * 20,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    color: '#ffffff',
+                    life: 0.6
+                });
+            }
+
+            updateStatus('WIPEOUT! Hit an obstacle! (-150 PTS)');
+        }
+
+        function updateParticles(dt) {
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= dt;
+            });
+            particles = particles.filter(p => p.life > 0);
+        }
+
+        // --- Render Engine ---
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Camera keeping rider centered vertically
+            const cameraY = rider.y - canvas.height * 0.38;
+
+            ctx.save();
+            ctx.translate(0, -cameraY);
+
+            // Render Trails
+            ctx.fillStyle = '#c8e2e2';
+            boardTrails.forEach(t => {
+                ctx.fillRect(t.x - 2, t.y, 4, 2);
+            });
+
+            // Render Obstacles
+            obstacles.forEach(obs => drawObstacle(obs));
+
+            // Render Particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color || '#ffffff';
+                ctx.fillRect(p.x, p.y, 3, 3);
+            });
+
+            // Render Rider
+            if (rider.invincibleTimer <= 0 || Math.floor(rider.blinkTimer * 12) % 2 === 0) {
+                drawSnowboarder();
+            }
+
+            // Render Yeti
+            if (yeti.active) drawYeti();
+
+            ctx.restore();
+        }
+
+        function drawSnowboarder() {
+            ctx.save();
+            ctx.translate(rider.x, rider.y);
+
+            if (rider.fallen) {
+                // --- FALLEN / WIPEOUT SPRITE ---
+                // Snowboard detached at an angle
+                ctx.save();
+                ctx.rotate(0.8);
+                ctx.fillStyle = '#ff0055';
+                ctx.fillRect(-16, -4, 32, 8);
+                ctx.fillStyle = '#00ffff';
+                ctx.fillRect(-16, -4, 4, 8);
+                ctx.fillRect(12, -4, 4, 8);
+                ctx.restore();
+
+                // Fallen rider splayed on snow
+                // Torso / Jacket
+                ctx.fillStyle = '#ffcc00';
+                ctx.fillRect(-8, -4, 16, 10);
+
+                // Head in snow
+                ctx.fillStyle = '#111111';
+                ctx.fillRect(-5, -12, 10, 8);
+                ctx.fillStyle = '#00ffcc';
+                ctx.fillRect(-3, -10, 6, 3);
+
+                // Arms splayed
+                ctx.fillStyle = '#ffcc00';
+                ctx.fillRect(-14, -2, 6, 4);
+                ctx.fillRect(8, -2, 6, 4);
+
+                // Legs splayed
+                ctx.fillStyle = '#222222';
+                ctx.fillRect(-10, 6, 6, 8);
+                ctx.fillRect(4, 6, 6, 8);
+
+                // "STUNNED" Stars / Spiral FX
+                const starAngle = (performance.now() / 150) % (Math.PI * 2);
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(Math.cos(starAngle) * 12 - 2, -18 + Math.sin(starAngle) * 4, 4, 4);
+                ctx.fillRect(Math.cos(starAngle + Math.PI) * 12 - 2, -18 + Math.sin(starAngle + Math.PI) * 4, 4, 4);
+
+            } else if (rider.airborne) {
+                // Airborne Trick Sprite
+                ctx.rotate((rider.trickSpin * Math.PI) / 180);
+
+                ctx.fillStyle = '#ff0055';
+                ctx.fillRect(-16, -4, 32, 8);
+                ctx.fillStyle = '#00ffff';
+                ctx.fillRect(-16, -4, 4, 8);
+                ctx.fillRect(12, -4, 4, 8);
+
+                ctx.fillStyle = '#ffcc00';
+                ctx.fillRect(-6, -8, 12, 12);
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(-4, -13, 8, 5);
+
+            } else {
+                // Active Riding Sprite
+                const tiltAngle = rider.angle * 0.42;
+                ctx.rotate(tiltAngle);
+
+                ctx.fillStyle = '#ff0055';
+                ctx.beginPath();
+                ctx.roundRect(-5, -16, 10, 32, 3);
+                ctx.fill();
+
+                ctx.fillStyle = '#00ffff';
+                ctx.fillRect(-4, -14, 8, 4);
+                ctx.fillRect(-4, 10, 8, 4);
+
+                ctx.fillStyle = '#222222';
+                ctx.fillRect(-3, -10, 6, 4);
+                ctx.fillRect(-3, 6, 6, 4);
+
+                ctx.fillStyle = '#ffcc00';
+                ctx.fillRect(-5, -6, 10, 12);
+
+                ctx.fillStyle = '#111111';
+                ctx.fillRect(-4, -11, 8, 5);
+                ctx.fillStyle = '#00ffcc';
+                ctx.fillRect(-3, -9, 6, 2);
+            }
+
+            ctx.restore();
+        }
+
+        function drawObstacle(obs) {
+            ctx.save();
+            ctx.translate(obs.x, obs.y);
+
+            switch (obs.type) {
+                case OBSTACLE.TREE:
+                    ctx.fillStyle = '#5c3317';
+                    ctx.fillRect(-2, 0, 4, 8);
+                    ctx.fillStyle = '#004d1a';
+                    ctx.beginPath();
+                    ctx.moveTo(0, -22); ctx.lineTo(-13, -6); ctx.lineTo(13, -6); ctx.closePath(); ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(0, -13); ctx.lineTo(-16, 2); ctx.lineTo(16, 2); ctx.closePath(); ctx.fill();
+                    break;
+
+                case OBSTACLE.ROCK:
+                    ctx.fillStyle = '#666666';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 9, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(-4, -7, 8, 4);
+                    break;
+
+                case OBSTACLE.LOG:
+                    ctx.fillStyle = '#8b4513';
+                    ctx.beginPath();
+                    ctx.roundRect(-16, -6, 32, 12, 4);
+                    ctx.fill();
+                    ctx.fillStyle = '#a0522d';
+                    ctx.fillRect(-12, -4, 24, 8);
+                    ctx.fillStyle = '#d2b48c';
+                    ctx.beginPath();
+                    ctx.arc(-14, 0, 4, 0, Math.PI * 2);
+                    ctx.arc(14, 0, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+
+                case OBSTACLE.GATE_LEFT:
+                case OBSTACLE.GATE_RIGHT:
+                    ctx.fillStyle = obs.type === OBSTACLE.GATE_LEFT ? '#ff0000' : '#0055ff';
+                    ctx.fillRect(-2, -18, 4, 22);
+                    ctx.fillRect(0, -18, 14, 8);
+                    break;
+
+                case OBSTACLE.FENCE:
+                    ctx.fillStyle = '#8b5a2b';
+                    ctx.fillRect(-16, -4, 32, 4);
+                    ctx.fillRect(-13, -8, 4, 12);
+                    ctx.fillRect(9, -8, 4, 12);
+                    break;
+            }
+
+            ctx.restore();
+        }
+
+        // High Visibility Iconic Pixel-Art Yeti Renderer
+        function drawYeti() {
+            ctx.save();
+            ctx.translate(yeti.x, yeti.y);
+
+            const bounce = Math.sin(yeti.frame * 2) * 4;
+
+            // White Fur Body
+            ctx.fillStyle = '#f0f8ff';
+            ctx.beginPath();
+            ctx.arc(0, bounce, 22, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Head
+            ctx.beginPath();
+            ctx.arc(0, -18 + bounce, 15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Glowing Red Eyes
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(-6, -22 + bounce, 4, 4);
+            ctx.fillRect(2, -22 + bounce, 4, 4);
+
+            // Mouth
+            ctx.fillStyle = '#000000';
+            if (yeti.mouthOpen) {
+                ctx.fillRect(-7, -15 + bounce, 14, 9);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(-5, -15 + bounce, 3, 3);
+                ctx.fillRect(2, -15 + bounce, 3, 3);
+            } else {
+                ctx.fillRect(-6, -14 + bounce, 12, 4);
+            }
+
+            // Animated Running Arms / Claws
+            ctx.strokeStyle = '#f0f8ff';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            if (yeti.hesitating) {
+                ctx.moveTo(-12, bounce); ctx.lineTo(-20, bounce + 16);
+                ctx.moveTo(12, bounce); ctx.lineTo(20, bounce + 16);
+            } else if (Math.floor(yeti.frame) % 2 === 0) {
+                ctx.moveTo(-12, bounce); ctx.lineTo(-26, bounce - 12);
+                ctx.moveTo(12, bounce); ctx.lineTo(26, bounce + 8);
+            } else {
+                ctx.moveTo(-12, bounce); ctx.lineTo(-26, bounce + 8);
+                ctx.moveTo(12, bounce); ctx.lineTo(26, bounce - 12);
+            }
+            ctx.stroke();
+
+            // Sweat drop FX when tired
+            if (yeti.hesitating) {
+                ctx.fillStyle = '#00bfff';
+                ctx.beginPath();
+                ctx.arc(14, -22 + bounce, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // Loop Runner
+        let lastTime = performance.now();
+        function gameLoop(now) {
+            const dt = Math.min(0.1, (now - lastTime) / 1000);
+            lastTime = now;
+
+            update(dt);
+            render();
+
+            document.getElementById('ui-dist').innerText = `${distance}m`;
+            document.getElementById('ui-score').innerText = score;
+            document.getElementById('ui-speed').innerText = `${speed}m/s`;
+            document.getElementById('ui-high').innerText = highScore;
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updateStatus(msg) {
+            document.getElementById('status-bar').innerText = msg;
+        }
+
+        // UNIFIED START / RESET FUNCTION
+        function startOrResetGame(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            audioEngine.init();
+
+            // Reset Player
+            rider.x = canvas.width / 2;
+            rider.y = 120;
+            rider.vx = 0;
+            rider.vy = 0;
+            rider.airborne = false;
+            rider.fallen = false;
+            rider.fallTimer = 0;
+            rider.invincibleTimer = 0;
+
+            // Reset Game Stats
+            score = 0;
+            distance = 0;
+
+            // Reset Yeti State
+            yeti.active = false;
+            yeti.y = -300;
+            yeti.stamina = 100;
+            yeti.hesitating = false;
+
+            // Hide Overlays
+            document.getElementById('yeti-banner').classList.add('hidden');
+            document.getElementById('game-over-banner').classList.add('hidden');
+
+            // Update Single Start Button Text
+            document.getElementById('btn-start-text').innerText = 'RESET GAME';
+
+            // Spawn Initial Terrain and Start Playing
+            spawnInitialTerrain();
+            gameState = STATE.PLAYING;
+
+            updateStatus('Shredding down the slope! Joystick DOWN = Fast.');
+        }
+
+        function showGameOverBanner(title, text) {
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('snowboard_free_high_score', highScore);
+            }
+
+            document.getElementById('game-over-title').innerText = title;
+            document.getElementById('game-over-desc').innerText = `${text} | Distance: ${distance}m | Score: ${score}`;
+            document.getElementById('game-over-banner').classList.remove('hidden');
+            document.getElementById('btn-start-text').innerText = 'START GAME';
+            updateStatus('GAME OVER! Press START GAME below to play again.');
+        }
+
+        // Keyboard Handlers
+        window.addEventListener('keydown', e => {
+            keys[e.key] = true;
+            if (e.key === ' ' || e.code === 'Space') {
+                e.preventDefault();
+                triggerManualJump();
+            }
+        });
+        window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+        // Touch Joystick Controls
+        const joystickZone = document.getElementById('joystick-container');
+        const joystickKnob = document.getElementById('joystick-knob');
+
+        function handleTouchMove(e) {
+            if (!touchActive) return;
+            const touch = e.touches[0];
+            const rect = joystickZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            let dx = touch.clientX - centerX;
+            let dy = touch.clientY - centerY;
+            const maxRadius = rect.width / 2;
+
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > maxRadius) {
+                dx = (dx / dist) * maxRadius;
+                dy = (dy / dist) * maxRadius;
+            }
+
+            joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+            joystickVector.x = dx / maxRadius;
+            joystickVector.y = dy / maxRadius;
+        }
+
+        joystickZone.addEventListener('touchstart', e => {
+            e.preventDefault();
+            touchActive = true;
+            handleTouchMove(e);
+        });
+        joystickZone.addEventListener('touchmove', e => {
+            e.preventDefault();
+            handleTouchMove(e);
+        });
+        joystickZone.addEventListener('touchend', e => {
+            e.preventDefault();
+            touchActive = false;
+            joystickKnob.style.transform = `translate(0px, 0px)`;
+            joystickVector = { x: 0, y: 0 };
+        });
+
+        // Dedicated Bottom Arcade Deck Jump Button
+        const jumpDeckBtn = document.getElementById('btn-jump-deck');
+        jumpDeckBtn.addEventListener('touchstart', e => {
+            e.preventDefault();
+            triggerManualJump();
+        });
+        jumpDeckBtn.addEventListener('click', triggerManualJump);
+
+        // Single Unified Start/Reset Button Listeners
+        const startButton = document.getElementById('btn-start-deck');
+        startButton.addEventListener('touchstart', startOrResetGame, { passive: false });
+        startButton.addEventListener('click', startOrResetGame);
+
+        document.getElementById('btn-sound').addEventListener('click', () => {
+            audioEngine.muted = !audioEngine.muted;
+            document.getElementById('btn-sound').innerHTML = audioEngine.muted ?
+                '<i class="fa-solid fa-volume-xmark text-red-400"></i>' :
+                '<i class="fa-solid fa-volume-high"></i>';
+        });
+
+        // Initialization
+        window.onload = () => {
+            resizeCanvas();
+            spawnInitialTerrain();
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
